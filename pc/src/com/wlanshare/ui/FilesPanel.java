@@ -35,6 +35,8 @@ public class FilesPanel implements Section {
     private final Node node;
     private final JPanel view = new JPanel(new BorderLayout());
     private final JPanel listBox = new JPanel();
+    /** 上次看到的待接收数量（用于判断是否是新来的）。 */
+    private int lastPending = -1;
     private final JComboBox<PeerItem> target = new JComboBox<PeerItem>();
     private final JComponent drop;
     private String targetId;
@@ -310,6 +312,7 @@ public class FilesPanel implements Section {
 
     private void rebuild() {
         listBox.removeAll();
+        Row firstPending = null;
         List<Transfer> list = node.transferList();
         if (list.isEmpty()) {
             JPanel empty = UI.empty("files", "还没有传输记录", "选择文件发送给任意在线设备，或等待对方发来文件");
@@ -317,18 +320,39 @@ public class FilesPanel implements Section {
             listBox.add(empty);
         } else {
             for (Transfer t : list) {
-                listBox.add(new Row(t));
+                Row row = new Row(t);
+                if (row.waitingAccept && firstPending == null) {
+                    firstPending = row;
+                }
+                listBox.add(row);
                 listBox.add(UI.vgap(2));
             }
         }
         listBox.revalidate();
         listBox.repaint();
+
+        // 有新的待接收文件时，滚动到它并高亮，便于从提示跳过来一眼看到
+        int pending = node.pendingFileCount();
+        if (pending > 0 && pending != lastPending && firstPending != null) {
+            lastPending = pending;
+            final Row target = firstPending;
+            SwingUtilities.invokeLater(() -> {
+                target.scrollRectToVisible(target.getBounds());
+                target.flash();
+            });
+        } else {
+            lastPending = pending;
+        }
     }
 
     private class Row extends JComponent {
         private final Transfer t;
         private boolean retryable;
         private boolean hover;
+        /** 需要我确认接收的文件 */
+        private final boolean waitingAccept;
+        /** 刚出现时的高亮（用于定位） */
+        private boolean highlight;
 
         Row(Transfer t) {
             this.t = t;
@@ -336,6 +360,7 @@ public class FilesPanel implements Section {
             setPreferredSize(new Dimension(400, 64));
             boolean openable = t.state == Transfer.DONE && t.direction == Transfer.RECEIVING;
             retryable = t.state == Transfer.FAILED && t.direction == Transfer.SENDING;
+            waitingAccept = t.state == Transfer.PENDING && t.direction == Transfer.RECEIVING;
             setToolTipText("左键：" + (retryable ? "重试续传" : openable ? "打开文件" : "—")
                     + " · 右键：更多操作");
             setCursor(new Cursor(Cursor.HAND_CURSOR));
@@ -356,6 +381,17 @@ public class FilesPanel implements Section {
                 public void mouseClicked(MouseEvent e) {
                     if (e.isPopupTrigger() || javax.swing.SwingUtilities.isRightMouseButton(e)) {
                         return;
+                    }
+                    if (waitingAccept) {
+                        if (btnAccept().contains(e.getPoint())) {
+                            chooseAccept();
+                            return;
+                        }
+                        if (btnReject().contains(e.getPoint())) {
+                            node.rejectTransfer(t.fid);
+                            frame.toast("已拒绝：" + t.name);
+                            return;
+                        }
                     }
                     if (retryable) {
                         node.retryTransfer(t.fid);
@@ -384,6 +420,64 @@ public class FilesPanel implements Section {
                     showMenu(Row.this, e.getX(), e.getY());
                 }
             });
+        }
+
+        /** 接收按钮区域。 */
+        private java.awt.Rectangle btnAccept() {
+            return new java.awt.Rectangle(getWidth() - 16 - 56 - 8 - 64, 40, 64, 22);
+        }
+
+        /** 拒绝按钮区域。 */
+        private java.awt.Rectangle btnReject() {
+            return new java.awt.Rectangle(getWidth() - 16 - 56, 40, 56, 22);
+        }
+
+        private void drawButton(Graphics2D g, java.awt.Rectangle r, String text,
+                                Color bg, Color fg) {
+            g.setColor(bg);
+            Theme.roundRect(g, r.x, r.y, r.width, r.height, 11);
+            g.setColor(fg);
+            g.setFont(Theme.font(11));
+            FontMetrics fm = g.getFontMetrics();
+            g.drawString(text, r.x + (r.width - fm.stringWidth(text)) / 2,
+                    r.y + (r.height + fm.getAscent() - fm.getDescent()) / 2);
+        }
+
+        /** 接收：可选默认下载目录或另存为。 */
+        private void chooseAccept() {
+            javax.swing.JPopupMenu menu = new javax.swing.JPopupMenu();
+            javax.swing.JMenuItem def = new javax.swing.JMenuItem("保存到下载目录");
+            def.setFont(Theme.font(12));
+            def.addActionListener(ev -> {
+                node.acceptTransfer(t.fid);
+                frame.toast("开始接收，保存到 " + node.recvDir.getAbsolutePath());
+            });
+            menu.add(def);
+            javax.swing.JMenuItem saveAs = new javax.swing.JMenuItem("另存为…");
+            saveAs.setFont(Theme.font(12));
+            saveAs.addActionListener(ev -> {
+                JFileChooser fc = new JFileChooser();
+                fc.setDialogTitle("选择保存位置");
+                fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+                if (fc.showSaveDialog(Row.this) == JFileChooser.APPROVE_OPTION) {
+                    node.acceptTransfer(t.fid, fc.getSelectedFile());
+                    frame.toast("开始接收，保存到 " + fc.getSelectedFile().getAbsolutePath());
+                }
+            });
+            menu.add(saveAs);
+            menu.show(this, getWidth() - 150, 44);
+        }
+
+        /** 短暂高亮，方便从提示跳过来时一眼看到。 */
+        void flash() {
+            highlight = true;
+            repaint();
+            javax.swing.Timer timer = new javax.swing.Timer(1800, e -> {
+                highlight = false;
+                repaint();
+            });
+            timer.setRepeats(false);
+            timer.start();
         }
 
         private void openFile() {
@@ -430,7 +524,7 @@ public class FilesPanel implements Section {
             int barX = 44;
             int barW = Math.max(80, getWidth() - 300);
             int barY = 48;
-            if (t.state == Transfer.ACTIVE || t.state == Transfer.PENDING) {
+            if (t.state == Transfer.ACTIVE) {
                 g3.setColor(new Color(0xE6EBF5));
                 Theme.roundRect(g3, barX, barY, barW, 6, 6);
                 g3.setColor(sending ? Theme.ACCENT : Theme.GREEN);
@@ -457,7 +551,7 @@ public class FilesPanel implements Section {
                     c = Theme.AMBER;
                     break;
                 case Transfer.PENDING:
-                    status = "等待对方确认";
+                    status = waitingAccept ? "等待你确认" : "等待对方确认";
                     c = Theme.AMBER;
                     break;
                 default:
@@ -474,6 +568,18 @@ public class FilesPanel implements Section {
             g3.setColor(new Color(0xAEB6C6));
             String time = Theme.timeText(t.ts);
             g3.drawString(time, getWidth() - g3.getFontMetrics().stringWidth(time) - 16, 41);
+
+            if (highlight) {
+                g3.setColor(Theme.ACCENT);
+                g3.setStroke(new BasicStroke(2f));
+                Theme.border(g3, 1, 1, getWidth() - 2, getHeight() - 2, 10);
+            }
+            if (waitingAccept) {
+                java.awt.Rectangle a = btnAccept();
+                java.awt.Rectangle r = btnReject();
+                drawButton(g3, a, "接收", Theme.ACCENT, Color.WHITE);
+                drawButton(g3, r, "拒绝", new Color(0xE8ECF4), new Color(0x5B6579));
+            }
             if (t.state == Transfer.DONE) {
                 g3.setColor(Theme.MUTED);
                 String hint = t.direction == Transfer.RECEIVING ? "点击打开" : "已完成";

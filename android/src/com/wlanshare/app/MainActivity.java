@@ -151,13 +151,16 @@ public class MainActivity extends Activity implements Node.Listener {
         navItems.put(key, item);
     }
 
-    /** 底部导航「消息」的未读红点。 */
+    /** 底部导航红点：消息未读 + 待接收文件。 */
     private void syncBadges() {
-        TextView badge = navBadges.get("chat");
+        setBadge(navBadges.get("chat"), node.unreadTotal());
+        setBadge(navBadges.get("files"), node.pendingFileCount());
+    }
+
+    private void setBadge(TextView badge, int n) {
         if (badge == null) {
             return;
         }
-        int n = node.unreadTotal();
         if (n > 0) {
             badge.setText(n > 99 ? "99+" : String.valueOf(n));
             badge.setVisibility(View.VISIBLE);
@@ -370,6 +373,24 @@ public class MainActivity extends Activity implements Node.Listener {
     }
 
     @Override
+    public void onFileOffer(String peerId, String name, long size) {
+        try {
+            android.media.Ringtone r = android.media.RingtoneManager.getRingtone(this,
+                    android.media.RingtoneManager.getDefaultUri(
+                            android.media.RingtoneManager.TYPE_NOTIFICATION));
+            if (r != null) {
+                r.play();
+            }
+        } catch (Throwable ignored) {
+        }
+        ui.post(new Runnable() {
+            @Override
+            public void run() {
+                syncBadges();
+            }
+        });
+    }
+
     public void onChat(String peerId, boolean mine, String text, long ts) {
         if (!mine && !peerId.equals(node.activeChat)) {
             // 新消息提示音（系统通知音），不打扰当前正在看的会话

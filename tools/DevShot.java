@@ -377,18 +377,30 @@ public final class DevShot {
         t1.ts = now - 120_000;
         node.transfers.put(t1.fid, t1);
 
+        // 待确认接收的文件（演示接收/拒绝按钮）
         Transfer t2 = new Transfer();
         t2.fid = "t2";
         t2.direction = Transfer.RECEIVING;
+        t2.peerId = a.id;
+        t2.peerNick = a.nick;
+        t2.name = "季度报表.xlsx";
+        t2.size = 4_800_000L;
+        t2.state = Transfer.PENDING;
+        t2.ts = now - 30_000;
+        node.transfers.put(t2.fid, t2);
+
+        Transfer t2b = new Transfer();
+        t2b.fid = "t2b";
+        t2b.direction = Transfer.RECEIVING;
         t2.peerId = c.id;
         t2.peerNick = c.nick;
-        t2.name = "设计规范 2026.pdf";
-        t2.size = 8_400_000L;
-        t2.done = 8_400_000L;
-        t2.path = "D:/Programs/WlanShare/build/selftest/b/recv/payload.bin";
-        t2.state = Transfer.DONE;
-        t2.ts = now - 900_000;
-        node.transfers.put(t2.fid, t2);
+        t2b.name = "设计规范 2026.pdf";
+        t2b.size = 8_400_000L;
+        t2b.done = 8_400_000L;
+        t2b.path = "D:/Programs/WlanShare/build/selftest/b/recv/payload.bin";
+        t2b.state = Transfer.DONE;
+        t2b.ts = now - 900_000;
+        node.transfers.put(t2b.fid, t2b);
 
         Transfer t3 = new Transfer();
         t3.fid = "t3";

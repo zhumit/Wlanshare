@@ -182,6 +182,17 @@ public class MainFrame extends JFrame implements Node.Listener {
         });
     }
 
+    @Override
+    public void onFileOffer(String peerId, String name, long size) {
+        Sounds.message();
+        SwingUtilities.invokeLater(() -> {
+            requestAttention();
+            if (sidebar != null) {
+                sidebar.syncStats();
+            }
+        });
+    }
+
     /** 标题带上未读数，方便在任务栏上直接看到。 */
     private void updateTitle() {
         int n = node.unreadTotal();
@@ -367,6 +378,12 @@ public class MainFrame extends JFrame implements Node.Listener {
                 // 红圈 = 未读消息总数 + 待处理好友请求
                 chat.badge = node.unreadTotal() + node.friendRequests.size();
                 chat.repaint();
+            }
+            NavItem files = navItems.get("files");
+            if (files != null) {
+                // 待接收文件用红点提示
+                files.badge = node.pendingFileCount();
+                files.repaint();
             }
         }
 

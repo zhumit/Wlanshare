@@ -125,7 +125,8 @@ public final class SelfTest {
         b.markRead(aid);
         check("查看后清零", waitFor(() -> b.unreadOf(aid) == 0, 6000), "未读=" + b.unreadOf(aid));
 
-        System.out.println("\n[4] 文件传输");
+        System.out.println("\n[4] 文件传输（自动接收模式）");
+        b.autoAcceptFiles = true;
         File src = new File(base, "payload.bin");
         src.getParentFile().mkdirs();
         byte[] data = new byte[3 * 1024 * 1024 + 777];
@@ -152,6 +153,57 @@ public final class SelfTest {
             fi.close();
             check("内容一致", java.util.Arrays.equals(data, rb), "size=" + rb.length);
         }
+
+        System.out.println("\n[4.1] 文件接收需要确认");
+        b.autoAcceptFiles = false;
+        File src2 = new File(base, "confirm.bin");
+        byte[] data2 = new byte[512 * 1024 + 33];
+        new Random(7).nextBytes(data2);
+        FileOutputStream fo2 = new FileOutputStream(src2);
+        fo2.write(data2);
+        fo2.close();
+
+        Transfer tr2 = a.sendFile(bid, src2);
+        boolean pendingOnB = waitFor(() -> b.pendingFileCount() == 1, 8000);
+        check("默认不自动接收（等待确认）", pendingOnB, "待接收=" + b.pendingFileCount());
+        check("发送方已发出请求", tr2.state != Transfer.FAILED && tr2.state != Transfer.REJECTED,
+                "state=" + tr2.state);
+
+        // 另存为到指定目录
+        File customDir = new File(base, "custom-" + System.currentTimeMillis());
+        customDir.mkdirs();
+        String fid2 = tr2.fid;
+        b.acceptTransfer(fid2, customDir);
+        boolean confirmDone = waitFor(() -> tr2.state == Transfer.DONE, 30000);
+        check("确认后传输完成", confirmDone, confirmDone ? "" : "state=" + tr2.state);
+        File savedInCustom = null;
+        for (File f : customDir.listFiles()) {
+            if (f.isFile() && f.getName().startsWith("confirm")) {
+                savedInCustom = f;
+            }
+        }
+        check("另存为目录生效", savedInCustom != null && savedInCustom.exists(),
+                savedInCustom == null ? "目录为空" : savedInCustom.getAbsolutePath());
+        if (savedInCustom != null) {
+            byte[] rb2 = new byte[(int) savedInCustom.length()];
+            java.io.DataInputStream fi2 = new java.io.DataInputStream(new java.io.FileInputStream(savedInCustom));
+            fi2.readFully(rb2);
+            fi2.close();
+            check("另存内容一致", java.util.Arrays.equals(data2, rb2), "size=" + rb2.length);
+        }
+
+        // 拒绝
+        File src3 = new File(base, "reject.bin");
+        FileOutputStream fo3 = new FileOutputStream(src3);
+        fo3.write(new byte[64 * 1024]);
+        fo3.close();
+        Transfer tr3 = a.sendFile(bid, src3);
+        boolean pending3 = waitFor(() -> b.pendingFileCount() == 1, 8000);
+        check("拒绝前处于待确认", pending3, "待接收=" + b.pendingFileCount());
+        b.rejectTransfer(tr3.fid);
+        boolean rejected = waitFor(() -> tr3.state == Transfer.REJECTED, 8000);
+        check("拒绝后发送方收到拒绝", rejected, "state=" + tr3.state);
+        check("拒绝后待接收清零", b.pendingFileCount() == 0, "待接收=" + b.pendingFileCount());
 
         System.out.println("\n[5] 协作文档");
         a.requestFriend(bid);
@@ -220,6 +272,7 @@ public final class SelfTest {
         check("改名实时同步", renamed, "A 看到=" + a.nameOf(bid));
 
         System.out.println("\n[7] 断点续传");
+        b.autoAcceptFiles = true;
         File big = new File(base, "big.bin");
         byte[] bigData = new byte[8 * 1024 * 1024];
         new Random(7).nextBytes(bigData);

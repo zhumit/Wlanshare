@@ -29,6 +29,8 @@ public class Transfer {
     public String error = "";
     /** 是否是一次断点续传（UI 文案用）。 */
     public boolean resumed;
+    /** 接收方指定的保存目录（为空则用默认接收目录）。 */
+    public java.io.File saveTo;
 
     public float progress() {
         if (size <= 0) {

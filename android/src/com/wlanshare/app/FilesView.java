@@ -192,6 +192,10 @@ public class FilesView implements Section {
                 status = "已拒绝";
                 color = Ui.AMBER;
                 break;
+            case Transfer.PENDING:
+                status = sending ? "等待对方确认" : "等待你确认";
+                color = Ui.AMBER;
+                break;
             default:
                 status = (t.offset > 0 ? "续传 " : "") + Math.round(t.progress() * 100) + "%";
                 color = Ui.ACCENT;
@@ -200,7 +204,7 @@ public class FilesView implements Section {
         top.addView(st);
         card.addView(top);
 
-        if (t.state == Transfer.ACTIVE || t.state == Transfer.PENDING) {
+        if (t.state == Transfer.ACTIVE) {
             ProgressBar pb = new ProgressBar(act, null, android.R.attr.progressBarStyleHorizontal);
             pb.setMax(1000);
             pb.setProgress((int) (t.progress() * 1000));
@@ -211,6 +215,38 @@ public class FilesView implements Section {
             LinearLayout.LayoutParams lp = Ui.lp(ViewGroup.LayoutParams.MATCH_PARENT, Ui.dp(act, 6));
             lp.topMargin = Ui.dp(act, 8);
             card.addView(pb, lp);
+        } else if (t.state == Transfer.PENDING && !sending) {
+            LinearLayout btns = Ui.row(act);
+            TextView ok = Ui.text(act, "接收", 12, 0xFFFFFFFF, true);
+            ok.setBackground(Ui.round(Ui.ACCENT, 14, act));
+            ok.setPadding(Ui.dp(act, 18), Ui.dp(act, 6), Ui.dp(act, 18), Ui.dp(act, 6));
+            Ui.click(ok, new Runnable() {
+                @Override
+                public void run() {
+                    node.acceptTransfer(t.fid);
+                    act.toast("开始接收，保存到「下载」目录");
+                    refresh();
+                }
+            });
+            TextView no = Ui.text(act, "拒绝", 12, 0xFF5B6579, true);
+            no.setBackground(Ui.round(0xFFE8ECF4, 14, act));
+            no.setPadding(Ui.dp(act, 18), Ui.dp(act, 6), Ui.dp(act, 18), Ui.dp(act, 6));
+            Ui.click(no, new Runnable() {
+                @Override
+                public void run() {
+                    node.rejectTransfer(t.fid);
+                    refresh();
+                }
+            });
+            LinearLayout.LayoutParams nlp = Ui.lp(ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            nlp.leftMargin = Ui.dp(act, 10);
+            btns.addView(ok);
+            btns.addView(no, nlp);
+            LinearLayout.LayoutParams blp = Ui.lp(ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            blp.topMargin = Ui.dp(act, 8);
+            card.addView(btns, blp);
         } else if (t.state == Transfer.FAILED) {
             TextView hint = Ui.text(act, "点此重试，将从已传部分继续", 11, Ui.ACCENT, true);
             hint.setPadding(0, Ui.dp(act, 6), 0, 0);

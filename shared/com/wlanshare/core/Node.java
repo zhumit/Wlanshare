@@ -48,6 +48,10 @@ public class Node implements Link.Handler, Discovery.Sink {
         void onChat(String peerId, boolean mine, String text, long ts);
 
         void onToast(String msg);
+
+        /** 收到文件传输请求（需要用户确认接收）。 */
+        default void onFileOffer(String peerId, String name, long size) {
+        }
     }
 
     public static class ChatMsg {
@@ -123,7 +127,8 @@ public class Node implements Link.Handler, Discovery.Sink {
     public final File partsDir;
     public final File voiceDir;
     public volatile File recvDir;
-    public volatile boolean autoAcceptFiles = true;
+    /** 是否自动接收文件：默认关，由用户决定接收 / 拒绝。 */
+    public volatile boolean autoAcceptFiles = false;
     public volatile boolean autoAcceptFriends = true;
 
     /** 收到的发现广播计数（用于自检与排障）。 */
@@ -1398,16 +1403,43 @@ public class Node implements Link.Handler, Discovery.Sink {
             t.state = Transfer.PENDING;
             notifyState("files");
             toast(t.peerNick + " 想发送文件：" + t.name);
+            Listener l = listener;
+            if (l != null) {
+                try {
+                    l.onFileOffer(t.peerId, t.name, t.size);
+                } catch (Exception ignored) {
+                }
+            }
         }
     }
 
+    /** 待接收数量（用于红点）。 */
+    public int pendingFileCount() {
+        int n = 0;
+        for (Transfer t : transfers.values()) {
+            if (t.direction == Transfer.RECEIVING && t.state == Transfer.PENDING) {
+                n++;
+            }
+        }
+        return n;
+    }
+
     public void acceptTransfer(final String fid) {
+        acceptTransfer(fid, null);
+    }
+
+    /** 接收文件；dir 为保存目录（null 表示默认接收目录）。 */
+    public void acceptTransfer(final String fid, final java.io.File dir) {
         post(new Runnable() {
             @Override
             public void run() {
                 Transfer t = transfers.get(fid);
                 if (t == null || t.state != Transfer.PENDING) {
                     return;
+                }
+                if (dir != null) {
+                    dir.mkdirs();
+                    t.saveTo = dir;
                 }
                 Link l = links.get(t.peerId);
                 if (l == null) {
@@ -1554,7 +1586,9 @@ public class Node implements Link.Handler, Discovery.Sink {
         }
         try {
             File part = new File(t.path);
-            File target = uniqueFile(recvDir, t.name);
+            File dir = t.saveTo != null ? t.saveTo : recvDir;
+            dir.mkdirs();
+            File target = uniqueFile(dir, t.name);
             moveFile(part, target);
             t.path = target.getAbsolutePath();
             t.state = Transfer.DONE;
@@ -2301,7 +2335,7 @@ public class Node implements Link.Handler, Discovery.Sink {
             if (!rd.isEmpty()) {
                 recvDir = new File(rd);
             }
-            autoAcceptFiles = Json.bool(m, "autoFiles", true);
+            autoAcceptFiles = Json.bool(m, "autoFiles", false);
             autoAcceptFriends = Json.bool(m, "autoFriends", true);
             for (Object o : Json.arr(m, "hidden")) {
                 if (o != null) {
