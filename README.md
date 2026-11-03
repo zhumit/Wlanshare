@@ -193,6 +193,10 @@ python build/build_all.py --test
 依赖：JDK 17+（`JAVA_HOME`）、Android SDK build-tools 36、Python 3。
 PC 端用 `jpackage` 打包成 app-image；APK 用 `aapt2 → javac → d8 → zipalign → apksigner` 全命令行构建。
 
+> 仓库内**不含** `pc/env`（打包用的 JRE 运行镜像，约 40MB）、`pc/dist`、`android/dist` 与 `temp/`，它们由本机构建产生。
+> 首次打包前需要把 JDK 运行镜像放到 `pc/env`（`jlink` 或复制现有 JRE 均可）；只想跑源码版的话，
+> 直接 `javac` 到 `build/pc` 后 `java -cp build/pc com.wlanshare.Main` 即可，不需要 `pc/env`。
+
 ## 8. 界面预览
 
 `docs/shots/` 下有 PC 端五个页面的 1:1 渲染截图（附近设备 / 消息 / 文件 / 文档 / 设置）。
