@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">WlanShare</string>
+    <string name="notif_channel">局域网服务</string>
+    <string name="notif_title">WlanShare 正在运行</string>
+    <string name="notif_text">可被同一 WiFi 下的设备发现</string>
+</resources>
