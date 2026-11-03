@@ -196,3 +196,9 @@ PC 端用 `jpackage` 打包成 app-image；APK 用 `aapt2 → javac → d8 → z
 ## 8. 界面预览
 
 `docs/shots/` 下有 PC 端五个页面的 1:1 渲染截图（附近设备 / 消息 / 文件 / 文档 / 设置）。
+
+## 9. 许可证
+
+本项目使用 [MIT License](LICENSE)，Copyright (c) 2026 zhumit。
+
+你可以自由使用、修改、分发，甚至商用，只需保留版权与许可声明；软件按「原样」提供，不附带任何担保。
