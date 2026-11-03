@@ -24,6 +24,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.LinkedHashMap;
+import java.util.Map;
 
 /** 主界面：顶部标题 + 内容区 + 底部导航。 */
 public class MainActivity extends Activity implements Node.Listener {
@@ -41,6 +42,8 @@ public class MainActivity extends Activity implements Node.Listener {
     private TextView title;
     private TextView subtitle;
     private LinearLayout navBar;
+    /** 底部导航的红点：key -> 数字气泡。 */
+    private final Map<String, TextView> navBadges = new LinkedHashMap<String, TextView>();
     private final LinkedHashMap<String, Section> sections = new LinkedHashMap<String, Section>();
     private final LinkedHashMap<String, LinearLayout> navItems = new LinkedHashMap<String, LinearLayout>();
     private String tab = "devices";
@@ -102,6 +105,7 @@ public class MainActivity extends Activity implements Node.Listener {
         addNav("settings", "设置", R.drawable.ic_settings);
 
         setContentView(root);
+        syncBadges();
     }
 
     private void addNav(final String key, String label, int iconRes) {
@@ -111,7 +115,28 @@ public class MainActivity extends Activity implements Node.Listener {
         TextView tv = Ui.text(this, label, 10, Ui.MUTED, false);
         tv.setGravity(android.view.Gravity.CENTER);
         tv.setIncludeFontPadding(false);
-        item.addView(iv);
+
+        // 图标右上角的未读红点
+        FrameLayout iconWrap = new FrameLayout(this);
+        iconWrap.addView(iv);
+        TextView badge = Ui.text(this, "", 10, 0xFFFFFFFF, true);
+        badge.setBackground(Ui.round(0xFFF2404D, 8, this));
+        badge.setGravity(android.view.Gravity.CENTER);
+        badge.setIncludeFontPadding(false);
+        badge.setMinWidth(Ui.dp(this, 16));
+        badge.setMinimumWidth(Ui.dp(this, 16));
+        badge.setMinHeight(Ui.dp(this, 16));
+        badge.setMinimumHeight(Ui.dp(this, 16));
+        badge.setPadding(Ui.dp(this, 4), 0, Ui.dp(this, 4), 0);
+        badge.setVisibility(View.GONE);
+        FrameLayout.LayoutParams blp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, Ui.dp(this, 16),
+                android.view.Gravity.END | android.view.Gravity.TOP);
+        blp.rightMargin = -Ui.dp(this, 8);
+        blp.topMargin = -Ui.dp(this, 2);
+        iconWrap.addView(badge, blp);
+        navBadges.put(key, badge);
+        item.addView(iconWrap);
         LinearLayout.LayoutParams tvp = Ui.lp(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         tvp.topMargin = Ui.dp(this, 4);
@@ -124,6 +149,21 @@ public class MainActivity extends Activity implements Node.Listener {
         });
         navBar.addView(item, Ui.lpWeight(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f));
         navItems.put(key, item);
+    }
+
+    /** 底部导航「消息」的未读红点。 */
+    private void syncBadges() {
+        TextView badge = navBadges.get("chat");
+        if (badge == null) {
+            return;
+        }
+        int n = node.unreadTotal();
+        if (n > 0) {
+            badge.setText(n > 99 ? "99+" : String.valueOf(n));
+            badge.setVisibility(View.VISIBLE);
+        } else {
+            badge.setVisibility(View.GONE);
+        }
     }
 
     private void select(String key) {
@@ -144,7 +184,11 @@ public class MainActivity extends Activity implements Node.Listener {
         for (String k : navItems.keySet()) {
             ViewGroup item = navItems.get(k);
             boolean active = k.equals(key);
-            ImageView icon = (ImageView) item.getChildAt(0);
+            View first = item.getChildAt(0);
+            // 图标外层可能包了一层 FrameLayout（用于右上角未读红点）
+            ImageView icon = first instanceof ImageView
+                    ? (ImageView) first
+                    : (ImageView) ((ViewGroup) first).getChildAt(0);
             TextView label = (TextView) item.getChildAt(1);
             icon.setColorFilter(active ? Ui.ACCENT : Ui.MUTED);
             label.setTextColor(active ? Ui.ACCENT : Ui.MUTED);
@@ -320,12 +364,25 @@ public class MainActivity extends Activity implements Node.Listener {
                 if (s != null) {
                     s.refresh();
                 }
+                syncBadges();
             }
         });
     }
 
     @Override
     public void onChat(String peerId, boolean mine, String text, long ts) {
+        if (!mine && !peerId.equals(node.activeChat)) {
+            // 新消息提示音（系统通知音），不打扰当前正在看的会话
+            try {
+                android.media.Ringtone r = android.media.RingtoneManager.getRingtone(this,
+                        android.media.RingtoneManager.getDefaultUri(
+                                android.media.RingtoneManager.TYPE_NOTIFICATION));
+                if (r != null) {
+                    r.play();
+                }
+            } catch (Throwable ignored) {
+            }
+        }
         ui.post(new Runnable() {
             @Override
             public void run() {
@@ -333,6 +390,7 @@ public class MainActivity extends Activity implements Node.Listener {
                 if (s != null) {
                     s.refresh();
                 }
+                syncBadges();
             }
         });
     }

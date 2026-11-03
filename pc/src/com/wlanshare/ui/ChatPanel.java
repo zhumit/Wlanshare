@@ -606,6 +606,11 @@ public class ChatPanel implements Section {
         return view;
     }
 
+    /** 当前打开的会话（未打开时为空串）。 */
+    public String currentChat() {
+        return current == null ? "" : current;
+    }
+
     public void openWith(String peerId) {
         openWith(peerId, null);
     }
@@ -625,6 +630,8 @@ public class ChatPanel implements Section {
             headHost.repaint();
         }
         current = peerId;
+        node.activeChat = peerId;
+        node.markRead(peerId);
         node.unhide(peerId);
         node.loadChatHistory(peerId);
         signature = -1;
@@ -1081,6 +1088,22 @@ public class ChatPanel implements Section {
                 g3.setColor(new Color(0xAEB6C6));
                 String time = Theme.timeText(msgs.get(msgs.size() - 1).ts);
                 g3.drawString(time, getWidth() - g3.getFontMetrics().stringWidth(time) - 10, 18);
+            }
+            // 未读红圈（带条数）；正在看的会话不显示
+            int unread = node.unreadOf(p.id);
+            if (unread > 0 && !sel) {
+                String txt = unread > 99 ? "99+" : String.valueOf(unread);
+                g3.setFont(Theme.bold(10));
+                FontMetrics fb = g3.getFontMetrics();
+                int bh = 17;
+                int bw = Math.max(bh, fb.stringWidth(txt) + 10);
+                int bx = getWidth() - bw - 10;
+                int by = 32;
+                g3.setColor(new Color(0xF2404D));
+                Theme.roundRect(g3, bx, by, bw, bh, bh / 2);
+                g3.setColor(Color.WHITE);
+                g3.drawString(txt, bx + (bw - fb.stringWidth(txt)) / 2,
+                        by + (bh + fb.getAscent() - fb.getDescent()) / 2);
             }
             g3.dispose();
         }

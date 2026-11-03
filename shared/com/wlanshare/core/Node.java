@@ -134,6 +134,10 @@ public class Node implements Link.Handler, Discovery.Sink {
     public final Map<String, String> aliases = new ConcurrentHashMap<String, String>();
     public final Map<String, String> friendRequests = new ConcurrentHashMap<String, String>();
     public final Map<String, List<ChatMsg>> chats = new ConcurrentHashMap<String, List<ChatMsg>>();
+    /** 未读消息数：peerId -> 条数（不持久化，重启清零）。 */
+    public final Map<String, Integer> unread = new ConcurrentHashMap<String, Integer>();
+    /** 当前正在查看的会话（由界面设置）；该会话收到消息不计未读。 */
+    public volatile String activeChat = "";
     /** 被用户手动删除的会话：不再出现在列表里，对方再发消息时自动恢复。 */
     public final Set<String> hidden = Collections.newSetFromMap(new ConcurrentHashMap<String, Boolean>());
     public final Map<String, Transfer> transfers = new ConcurrentHashMap<String, Transfer>();
@@ -798,6 +802,10 @@ public class Node implements Link.Handler, Discovery.Sink {
         chatsFor(link.peerId).add(m);
         appendChatLog(link.peerId, m);
         ensureVisible(link.peerId);
+        // 不在当前查看的会话里 -> 记一条未读
+        if (!link.peerId.equals(activeChat)) {
+            bumpUnread(link.peerId);
+        }
         Listener l = listener;
         if (l != null) {
             try {
@@ -806,6 +814,7 @@ public class Node implements Link.Handler, Discovery.Sink {
             }
         }
         notifyState("chat");
+        notifyState("unread");
     }
 
     private String saveVoice(String mid, byte[] data) {
@@ -992,6 +1001,46 @@ public class Node implements Link.Handler, Discovery.Sink {
     public int unreadGuess(String pid) {
         List<ChatMsg> l = chats.get(pid);
         return l == null ? 0 : l.size();
+    }
+
+    /** 未读消息总数。 */
+    public int unreadTotal() {
+        int n = 0;
+        for (Integer v : unread.values()) {
+            if (v != null) {
+                n += v;
+            }
+        }
+        return n;
+    }
+
+    /** 某个会话的未读数。 */
+    public int unreadOf(String pid) {
+        Integer v = pid == null ? null : unread.get(pid);
+        return v == null ? 0 : v;
+    }
+
+    /** 已读完某个会话：清掉红圈。 */
+    public void markRead(final String pid) {
+        if (pid == null || pid.isEmpty()) {
+            return;
+        }
+        if (unread.remove(pid) != null) {
+            notifyState("unread");
+        }
+    }
+
+    /** 全部标记已读。 */
+    public void markAllRead() {
+        if (!unread.isEmpty()) {
+            unread.clear();
+            notifyState("unread");
+        }
+    }
+
+    private void bumpUnread(String pid) {
+        Integer v = unread.get(pid);
+        unread.put(pid, v == null ? 1 : v + 1);
     }
 
     private List<ChatMsg> chatsFor(String pid) {

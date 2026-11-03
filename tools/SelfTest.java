@@ -109,6 +109,22 @@ public final class SelfTest {
         b.sendChat(aid, "收到！中文与 emoji 正常 😀");
         check("反向消息", waitFor(() -> a.chatList(bid).size() >= 1, 6000), "");
 
+        System.out.println("\n[3.1] 未读红圈计数");
+        a.activeChat = bid;
+        b.activeChat = aid;
+        int unreadBefore = b.unreadOf(aid);
+        a.sendChat(bid, "这条不该计未读（B 正在看这个会话）");
+        Thread.sleep(900);
+        check("正在看的会话不计未读", b.unreadOf(aid) == unreadBefore, "未读=" + b.unreadOf(aid));
+        b.activeChat = "";
+        a.sendChat(bid, "这条应当计未读 1");
+        a.sendChat(bid, "这条应当计未读 2");
+        boolean counted = waitFor(() -> b.unreadOf(aid) >= 2, 6000);
+        check("非当前会话累加未读", counted, "未读=" + b.unreadOf(aid));
+        check("未读总数正确", b.unreadTotal() >= 2, "总数=" + b.unreadTotal());
+        b.markRead(aid);
+        check("查看后清零", waitFor(() -> b.unreadOf(aid) == 0, 6000), "未读=" + b.unreadOf(aid));
+
         System.out.println("\n[4] 文件传输");
         File src = new File(base, "payload.bin");
         src.getParentFile().mkdirs();

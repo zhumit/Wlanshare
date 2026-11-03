@@ -72,7 +72,8 @@ def build_pc():
     os.makedirs(appinput, exist_ok=True)
     run([os.path.join(JDK, 'bin', 'jar.exe'), '--create',
          '--file', os.path.join(appinput, 'WlanShare.jar'),
-         '--main-class', 'com.wlanshare.Main', '-C', classes, '.'])
+         '--main-class', 'com.wlanshare.Main', '-C', classes, '.',
+         '-C', os.path.join(ROOT, 'pc', 'res'), '.'])
 
     dist = os.path.join(ROOT, 'pc', 'dist')
     if os.path.isdir(dist):

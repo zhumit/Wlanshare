@@ -213,9 +213,10 @@ public class FilesPanel implements Section {
     private void refreshTargets() {
         String keep = targetId;
         target.removeAllItems();
-        List<Peer> peers = node.friendPeerList();
+        // 发送文件不要求加好友：列出所有在线设备
+        List<Peer> peers = node.peerList();
         if (peers.isEmpty()) {
-            peers = node.peerList();
+            peers = node.friendPeerList();
         }
         for (Peer p : peers) {
             target.addItem(new PeerItem(p.id, node.nameOf(p.id)));
@@ -311,7 +312,7 @@ public class FilesPanel implements Section {
         listBox.removeAll();
         List<Transfer> list = node.transferList();
         if (list.isEmpty()) {
-            JPanel empty = UI.empty("files", "还没有传输记录", "选择文件发送给好友，或等待对方发来文件");
+            JPanel empty = UI.empty("files", "还没有传输记录", "选择文件发送给任意在线设备，或等待对方发来文件");
             empty.setBorder(BorderFactory.createEmptyBorder(26, 0, 26, 0));
             listBox.add(empty);
         } else {
@@ -510,9 +511,9 @@ public class FilesPanel implements Section {
             // 再次发送给任意设备（断点续传仍然生效）
             javax.swing.JMenu again = new javax.swing.JMenu("再次发送");
             again.setFont(Theme.font(12));
-            List<Peer> peers = node.friendPeerList();
+            List<Peer> peers = node.peerList();
             if (peers.isEmpty()) {
-                peers = node.peerList();
+                peers = node.friendPeerList();
             }
             if (peers.isEmpty() || !f.isFile()) {
                 again.setEnabled(false);

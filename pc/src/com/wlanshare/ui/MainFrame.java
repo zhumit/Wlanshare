@@ -37,6 +37,10 @@ public class MainFrame extends JFrame implements Node.Listener {
     private final Map<String, NavItem> navItems = new LinkedHashMap<String, NavItem>();
     private final Set<String> pending = new HashSet<String>();
     private Timer flush;
+    /** 标题基准与「新消息」闪烁状态。 */
+    private final String baseTitle = "WlanShare · 局域网协作";
+    private Timer flashTimer;
+    private int flashCount;
     private Sidebar sidebar;
     private String current = "";
     private Toast toast;
@@ -69,6 +73,7 @@ public class MainFrame extends JFrame implements Node.Listener {
                 s.refresh(String.join(",", copy));
             }
             sidebar.syncStats();
+            updateTitle();
         });
         flush.setRepeats(false);
 
@@ -106,9 +111,20 @@ public class MainFrame extends JFrame implements Node.Listener {
         for (Map.Entry<String, NavItem> e : navItems.entrySet()) {
             e.getValue().setActive(e.getKey().equals(key));
         }
+        Section chatSection = sections.get("chat");
+        if (chatSection instanceof ChatPanel) {
+            String open = ((ChatPanel) chatSection).currentChat();
+            if ("chat".equals(key) && open != null && !open.isEmpty()) {
+                node.activeChat = open;
+                node.markRead(open);
+            } else {
+                node.activeChat = "";
+            }
+        }
         s.onShow();
         s.refresh("all");
         sidebar.syncStats();
+        updateTitle();
     }
 
     public String currentSection() {
@@ -151,12 +167,54 @@ public class MainFrame extends JFrame implements Node.Listener {
 
     @Override
     public void onChat(String peerId, boolean mine, String text, long ts) {
+        if (!mine && !peerId.equals(node.activeChat)) {
+            Sounds.message();
+            SwingUtilities.invokeLater(() -> {
+                updateTitle();
+                requestAttention();
+            });
+        }
         SwingUtilities.invokeLater(() -> {
             Section s = sections.get("chat");
             if (s != null) {
                 s.refresh("chat");
             }
         });
+    }
+
+    /** 标题带上未读数，方便在任务栏上直接看到。 */
+    private void updateTitle() {
+        int n = node.unreadTotal();
+        String t = n > 0 ? baseTitle + " · " + n + " 条未读" : baseTitle;
+        if (!t.equals(getTitle())) {
+            setTitle(t);
+        }
+    }
+
+    /**
+     * 任务栏提示（类似聊天软件）：
+     * 窗口没在前台时把窗口提到前面，Windows 会闪烁任务栏按钮；同时标题闪几下。
+     */
+    private void requestAttention() {
+        if (isActive()) {
+            return;
+        }
+        toFront();
+        if (flashTimer != null && flashTimer.isRunning()) {
+            return;
+        }
+        flashCount = 0;
+        flashTimer = new Timer(420, e -> {
+            flashCount++;
+            int n = node.unreadTotal();
+            String base = n > 0 ? baseTitle + " · " + n + " 条未读" : baseTitle;
+            setTitle(flashCount % 2 == 1 ? "● " + base : base);
+            if (flashCount >= 8) {
+                flashTimer.stop();
+                updateTitle();
+            }
+        });
+        flashTimer.start();
     }
 
     @Override
@@ -306,7 +364,8 @@ public class MainFrame extends JFrame implements Node.Listener {
             me.repaint();
             NavItem chat = navItems.get("chat");
             if (chat != null) {
-                chat.badge = node.friendRequests.size();
+                // 红圈 = 未读消息总数 + 待处理好友请求
+                chat.badge = node.unreadTotal() + node.friendRequests.size();
                 chat.repaint();
             }
         }

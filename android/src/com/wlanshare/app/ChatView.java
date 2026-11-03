@@ -79,6 +79,8 @@ public class ChatView implements Section {
     }
 
     public void openWith(String peerId) {
+        node.activeChat = peerId;
+        node.markRead(peerId);
         if (peerId == null) {
             return;
         }
@@ -104,6 +106,7 @@ public class ChatView implements Section {
     private void showList() {
         chatMode = false;
         current = null;
+        node.activeChat = "";
         root.removeAllViews();
         ScrollView sv = new ScrollView(act);
         LinearLayout list = Ui.column(act);
@@ -160,7 +163,18 @@ public class ChatView implements Section {
         if (!msgs.isEmpty()) {
             right.addView(Ui.text(act, Ui.timeText(msgs.get(msgs.size() - 1).ts), 10, 0xFFB0B8C8, false));
         }
-        if (p.connected) {
+        int unread = node.unreadOf(p.id);
+        if (unread > 0) {
+            TextView badge = Ui.text(act, unread > 99 ? "99+" : String.valueOf(unread),
+                    10, 0xFFFFFFFF, true);
+            badge.setBackground(Ui.round(0xFFF2404D, 10, act));
+            badge.setGravity(Gravity.CENTER);
+            badge.setPadding(Ui.dp(act, 6), 0, Ui.dp(act, 6), Ui.dp(act, 1));
+            LinearLayout.LayoutParams blp = Ui.lp(ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            blp.topMargin = Ui.dp(act, 4);
+            right.addView(badge, blp);
+        } else if (p.connected) {
             TextView dot = Ui.text(act, "在线", 10, Ui.GREEN, false);
             dot.setPadding(0, Ui.dp(act, 4), 0, 0);
             right.addView(dot);

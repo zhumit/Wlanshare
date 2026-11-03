@@ -356,6 +356,10 @@ public final class DevShot {
         chat.add(m6);
 
         node.chats.put(a.id, chat);
+        // 未读红圈演示：小美 3 条、阿泽 1 条
+        node.unread.put(a.id, 3);
+        node.unread.put(b.id, 5);
+        node.unread.put(c.id, 1);
         List<Node.ChatMsg> chat2 = new ArrayList<Node.ChatMsg>();
         chat2.add(new Node.ChatMsg(false, "设计稿 v3 已上传", now - 86_400_000L));
         node.chats.put(c.id, chat2);
